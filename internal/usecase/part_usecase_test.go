@@ -1,10 +1,10 @@
 package usecase_test
 
 import (
+	"errors"
 	"execution-autoshop/internal/domain"
 	"execution-autoshop/internal/mocks"
 	"execution-autoshop/internal/usecase"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

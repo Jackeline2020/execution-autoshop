@@ -1,13 +1,13 @@
 package handler_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"execution-autoshop/internal/domain"
 	"execution-autoshop/internal/handler"
 	"execution-autoshop/internal/mocks"
 	"execution-autoshop/internal/usecase"
-	"bytes"
-	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"

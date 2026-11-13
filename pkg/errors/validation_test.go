@@ -1,8 +1,8 @@
 package errors_test
 
 import (
-	pkgerrors "execution-autoshop/pkg/errors"
 	"errors"
+	pkgerrors "execution-autoshop/pkg/errors"
 	"testing"
 
 	"github.com/go-playground/validator/v10"
