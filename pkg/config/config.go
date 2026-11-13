@@ -23,6 +23,11 @@ func LoadAWSConfig(ctx context.Context) (aws.Config, error) {
 	return awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(getEnv("AWS_REGION", "us-east-1")))
 }
 
+// Env lê uma variável de ambiente, com valor padrão.
+func Env(key, fallback string) string {
+	return getEnv(key, fallback)
+}
+
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

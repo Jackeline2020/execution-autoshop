@@ -47,3 +47,8 @@ func TestInsufficientStockError(t *testing.T) {
 	err := &domain.InsufficientStockError{PartID: "p9"}
 	assert.Contains(t, err.Error(), "p9")
 }
+
+func TestNewReservation_InvalidIsTyped(t *testing.T) {
+	_, err := domain.NewReservation("os-1", nil)
+	assert.ErrorIs(t, err, domain.ErrInvalidReservation)
+}

@@ -30,3 +30,10 @@ func TestLoadAWSConfigDefaultRegion(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "us-east-1", cfg.Region)
 }
+
+func TestEnv(t *testing.T) {
+	t.Setenv("FILA_TESTE", "")
+	assert.Equal(t, "padrao", Env("FILA_TESTE", "padrao"))
+	t.Setenv("FILA_TESTE", "outra")
+	assert.Equal(t, "outra", Env("FILA_TESTE", "padrao"))
+}

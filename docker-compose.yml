@@ -8,6 +8,7 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
     volumes:
       - ./localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+      - ./localstack/samples:/samples:ro
     healthcheck:
       test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name os-events >/dev/null 2>&1"]
       interval: 5s

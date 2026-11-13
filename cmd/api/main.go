@@ -10,13 +10,16 @@ import (
 	"syscall"
 	"time"
 
+	"execution-autoshop/internal/consumer"
 	"execution-autoshop/internal/handler"
+	"execution-autoshop/internal/messaging"
 	"execution-autoshop/internal/middleware"
 	"execution-autoshop/internal/repository"
 	"execution-autoshop/internal/usecase"
 	"execution-autoshop/pkg/config"
 	"execution-autoshop/pkg/observability"
 
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gin-gonic/gin"
 	"github.com/newrelic/go-agent/v3/integrations/nrgin"
 )
@@ -38,10 +41,33 @@ func main() {
 	partUC := usecase.NewPartUseCase(partRepo)
 	partHandler := handler.NewPartHandler(partUC)
 
+	// Filas da Saga: comandos chegam em execution-commands, eventos saem em
+	// os-events (ADR-006).
+	sqsClient := sqs.NewFromConfig(awsCfg)
+	commandsURL, err := messaging.QueueURL(ctx, sqsClient, config.Env("EXECUTION_COMMANDS_QUEUE", "execution-commands"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	eventsURL, err := messaging.QueueURL(ctx, sqsClient, config.Env("OS_EVENTS_QUEUE", "os-events"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	publisher := messaging.NewSQSPublisher(sqsClient, eventsURL)
+
 	reservationRepo := repository.NewReservationDynamoRepository(dynamo)
+	reservationUC := usecase.NewReservationUseCase(reservationRepo)
 	executionRepo := repository.NewExecutionDynamoRepository(dynamo)
-	executionUC := usecase.NewExecutionUseCase(executionRepo, reservationRepo)
+	executionUC := usecase.NewExecutionUseCase(executionRepo, reservationRepo, publisher)
 	executionHandler := handler.NewExecutionHandler(executionUC)
+
+	commandHandler := consumer.NewCommandHandler(executionUC, reservationUC, publisher)
+	processedRepo := repository.NewProcessedMessageDynamoRepository(dynamo)
+	commandConsumer := consumer.NewSQSConsumer(sqsClient, commandsURL, commandHandler, processedRepo)
+	consumerDone := make(chan struct{})
+	go func() {
+		commandConsumer.Run(ctx)
+		close(consumerDone)
+	}()
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -98,6 +124,7 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("erro ao encerrar o servidor HTTP: %v", err)
 	}
+	<-consumerDone
 	if nrApp != nil {
 		nrApp.Shutdown(5 * time.Second)
 	}

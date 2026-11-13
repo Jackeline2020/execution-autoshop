@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"execution-autoshop/internal/domain"
+	"execution-autoshop/internal/messaging"
 	"execution-autoshop/internal/mocks"
 	"execution-autoshop/internal/usecase"
 
@@ -13,125 +14,192 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupExecution() (*usecase.ExecutionUseCase, *mocks.ExecutionRepositoryMock, *mocks.ReservationRepositoryMock) {
-	repo := new(mocks.ExecutionRepositoryMock)
-	res := new(mocks.ReservationRepositoryMock)
-	return usecase.NewExecutionUseCase(repo, res), repo, res
+type executionMocks struct {
+	repo *mocks.ExecutionRepositoryMock
+	res  *mocks.ReservationRepositoryMock
+	pub  *mocks.PublisherMock
+}
+
+func setupExecution() (*usecase.ExecutionUseCase, executionMocks) {
+	m := executionMocks{
+		repo: new(mocks.ExecutionRepositoryMock),
+		res:  new(mocks.ReservationRepositoryMock),
+		pub:  new(mocks.PublisherMock),
+	}
+	return usecase.NewExecutionUseCase(m.repo, m.res, m.pub), m
 }
 
 func executionIn(status domain.ExecutionStatus) domain.Execution {
-	return domain.Execution{OrderID: "os-1", Status: status, CreatedAt: "2026-01-01T10:00:00Z"}
+	return domain.Execution{OrderID: "os-1", SagaID: "saga-1", CorrelationID: "corr-1", Status: status, CreatedAt: "2026-01-01T10:00:00Z"}
 }
 
-func TestStartDiagnosis_Creates(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("Create", mock.AnythingOfType("domain.Execution")).Return(nil)
+func TestStartDiagnosis_CreatesWithSagaContext(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("Create", mock.AnythingOfType("domain.Execution")).Return(nil)
 
-	e, err := uc.StartDiagnosis("os-1")
+	e, err := uc.StartDiagnosis("os-1", "saga-1", "corr-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ExecutionAwaitingDiagnosis, e.Status)
+	assert.Equal(t, "saga-1", e.SagaID)
+	assert.Equal(t, "corr-1", e.CorrelationID)
+	assert.Empty(t, m.pub.Published)
 }
 
 func TestStartDiagnosis_RepeatedReturnsExisting(t *testing.T) {
-	uc, repo, _ := setupExecution()
+	uc, m := setupExecution()
 	existing := executionIn(domain.ExecutionDiagnosed)
-	repo.On("Create", mock.Anything).Return(domain.ErrExecutionExists)
-	repo.On("FindByOrderID", "os-1").Return(existing, nil)
+	m.repo.On("Create", mock.Anything).Return(domain.ErrExecutionExists)
+	m.repo.On("FindByOrderID", "os-1").Return(existing, nil)
 
-	e, err := uc.StartDiagnosis("os-1")
+	e, err := uc.StartDiagnosis("os-1", "saga-1", "corr-1")
 	require.NoError(t, err)
 	assert.Equal(t, existing, e)
 }
 
 func TestStartDiagnosis_Errors(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	_, err := uc.StartDiagnosis("")
+	uc, m := setupExecution()
+	_, err := uc.StartDiagnosis("", "s", "c")
 	assert.ErrorIs(t, err, domain.ErrOrderRequired)
 
-	repo.On("Create", mock.Anything).Return(errors.New("dynamo fora"))
-	_, err = uc.StartDiagnosis("os-1")
+	m.repo.On("Create", mock.Anything).Return(errors.New("dynamo fora"))
+	_, err = uc.StartDiagnosis("os-1", "s", "c")
 	assert.Error(t, err)
 }
 
-func TestRegisterDiagnosis(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
-	repo.On("Update", mock.Anything, domain.ExecutionAwaitingDiagnosis).Return(nil)
+func TestRegisterDiagnosis_PublishesEvent(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionAwaitingDiagnosis).Return(nil)
+	m.pub.On("Publish", messaging.EvtDiagnosisFinished, "os-1").Return(nil)
 
 	e, err := uc.RegisterDiagnosis("os-1", "Troca de óleo")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ExecutionDiagnosed, e.Status)
-	assert.Equal(t, "Troca de óleo", e.Diagnosis)
+
+	require.Len(t, m.pub.Published, 1)
+	evt := m.pub.Published[0]
+	assert.Equal(t, "saga-1", evt.SagaID)
+	assert.Equal(t, "corr-1", evt.CorrelationID)
+	var p messaging.DiagnosisFinishedPayload
+	require.NoError(t, evt.DecodePayload(&p))
+	assert.Equal(t, "Troca de óleo", p.Diagnosis)
 }
 
-func TestEnqueueAndStart(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionDiagnosed), nil).Once()
-	repo.On("Update", mock.Anything, domain.ExecutionDiagnosed).Return(nil)
+func TestRegisterDiagnosis_PublishFailureKeepsChange(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionAwaitingDiagnosis).Return(nil)
+	m.pub.On("Publish", mock.Anything, mock.Anything).Return(errors.New("sqs fora"))
+
+	e, err := uc.RegisterDiagnosis("os-1", "Troca de óleo")
+	require.NoError(t, err)
+	assert.Equal(t, domain.ExecutionDiagnosed, e.Status)
+}
+
+func TestEnqueue(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionDiagnosed), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionDiagnosed).Return(nil)
+
 	e, err := uc.Enqueue("os-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ExecutionQueued, e.Status)
-
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionQueued), nil).Once()
-	repo.On("Update", mock.Anything, domain.ExecutionQueued).Return(nil)
-	e, err = uc.Start("os-1")
-	require.NoError(t, err)
-	assert.Equal(t, domain.ExecutionInRepair, e.Status)
 }
 
-func TestFinish_ConsumesReservation(t *testing.T) {
-	uc, repo, res := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
-	repo.On("Update", mock.Anything, domain.ExecutionInRepair).Return(nil)
-	res.On("Consume", "os-1").Return(nil)
+func TestEnqueue_AlreadyQueuedIsIgnored(t *testing.T) {
+	for _, status := range []domain.ExecutionStatus{domain.ExecutionQueued, domain.ExecutionInRepair, domain.ExecutionFinished} {
+		uc, m := setupExecution()
+		m.repo.On("FindByOrderID", "os-1").Return(executionIn(status), nil)
+
+		e, err := uc.Enqueue("os-1")
+		require.NoError(t, err)
+		assert.Equal(t, status, e.Status)
+		m.repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+	}
+}
+
+func TestEnqueue_Errors(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "x").Return(domain.Execution{}, domain.ErrExecutionNotFound)
+	_, err := uc.Enqueue("x")
+	assert.ErrorIs(t, err, domain.ErrExecutionNotFound)
+
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
+	var transErr *domain.InvalidTransitionError
+	_, err = uc.Enqueue("os-1")
+	assert.ErrorAs(t, err, &transErr)
+}
+
+func TestStart_PublishesEvent(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionQueued), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionQueued).Return(nil)
+	m.pub.On("Publish", messaging.EvtExecutionStarted, "os-1").Return(nil)
+
+	e, err := uc.Start("os-1")
+	require.NoError(t, err)
+	assert.Equal(t, domain.ExecutionInRepair, e.Status)
+	m.pub.AssertExpectations(t)
+}
+
+func TestFinish_ConsumesReservationAndPublishes(t *testing.T) {
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionInRepair).Return(nil)
+	m.res.On("Consume", "os-1").Return(nil)
+	m.pub.On("Publish", messaging.EvtExecutionFinished, "os-1").Return(nil)
 
 	e, err := uc.Finish("os-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ExecutionFinished, e.Status)
-	res.AssertExpectations(t)
+	m.res.AssertExpectations(t)
+	m.pub.AssertExpectations(t)
 }
 
 func TestFinish_WithoutReservation(t *testing.T) {
-	uc, repo, res := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
-	repo.On("Update", mock.Anything, domain.ExecutionInRepair).Return(nil)
-	res.On("Consume", "os-1").Return(domain.ErrReservationNotFound)
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
+	m.repo.On("Update", mock.Anything, domain.ExecutionInRepair).Return(nil)
+	m.res.On("Consume", "os-1").Return(domain.ErrReservationNotFound)
+	m.pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
 
 	_, err := uc.Finish("os-1")
 	assert.NoError(t, err)
 }
 
 func TestFinish_ConsumeFailsDoesNotSave(t *testing.T) {
-	uc, repo, res := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
-	res.On("Consume", "os-1").Return(errors.New("dynamo fora"))
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionInRepair), nil)
+	m.res.On("Consume", "os-1").Return(errors.New("dynamo fora"))
 
 	_, err := uc.Finish("os-1")
 	assert.Error(t, err)
-	repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+	m.repo.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
+	assert.Empty(t, m.pub.Published)
 }
 
 func TestChange_Errors(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("FindByOrderID", "nao-existe").Return(domain.Execution{}, domain.ErrExecutionNotFound)
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "nao-existe").Return(domain.Execution{}, domain.ErrExecutionNotFound)
 	_, err := uc.Start("nao-existe")
 	assert.ErrorIs(t, err, domain.ErrExecutionNotFound)
 
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionAwaitingDiagnosis), nil)
 	var transErr *domain.InvalidTransitionError
 	_, err = uc.Finish("os-1")
 	assert.ErrorAs(t, err, &transErr)
 
-	repo.On("Update", mock.Anything, mock.Anything).Return(errors.New("conflito"))
+	m.repo.On("Update", mock.Anything, mock.Anything).Return(errors.New("conflito"))
 	_, err = uc.RegisterDiagnosis("os-1", "ok")
 	assert.Error(t, err)
+	assert.Empty(t, m.pub.Published)
 }
 
 func TestQueue_OrdersByWaitingTime(t *testing.T) {
-	uc, repo, _ := setupExecution()
+	uc, m := setupExecution()
 	newer := domain.Execution{OrderID: "a", Status: domain.ExecutionAwaitingDiagnosis, CreatedAt: "2026-01-01T12:00:00Z"}
 	older := domain.Execution{OrderID: "b", Status: domain.ExecutionQueued, CreatedAt: "2026-01-01T08:00:00Z", QueuedAt: "2026-01-01T09:00:00Z"}
-	repo.On("FindByStatuses", []domain.ExecutionStatus{domain.ExecutionAwaitingDiagnosis, domain.ExecutionQueued}).
+	m.repo.On("FindByStatuses", []domain.ExecutionStatus{domain.ExecutionAwaitingDiagnosis, domain.ExecutionQueued}).
 		Return([]domain.Execution{newer, older}, nil)
 
 	items, err := uc.Queue()
@@ -140,15 +208,15 @@ func TestQueue_OrdersByWaitingTime(t *testing.T) {
 }
 
 func TestQueue_Error(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("FindByStatuses", mock.Anything).Return([]domain.Execution(nil), errors.New("dynamo fora"))
+	uc, m := setupExecution()
+	m.repo.On("FindByStatuses", mock.Anything).Return([]domain.Execution(nil), errors.New("dynamo fora"))
 	_, err := uc.Queue()
 	assert.Error(t, err)
 }
 
 func TestGetByOrderID(t *testing.T) {
-	uc, repo, _ := setupExecution()
-	repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionQueued), nil)
+	uc, m := setupExecution()
+	m.repo.On("FindByOrderID", "os-1").Return(executionIn(domain.ExecutionQueued), nil)
 	e, err := uc.GetByOrderID("os-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ExecutionQueued, e.Status)

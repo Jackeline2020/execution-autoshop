@@ -38,15 +38,18 @@ func (e *InvalidTransitionError) Error() string {
 // ao fim do reparo. Cada mudança de status registra a data e hora em que
 // aconteceu.
 type Execution struct {
-	OrderID     string          `json:"order_id"               dynamodbav:"order_id"`
-	Status      ExecutionStatus `json:"status"                 dynamodbav:"status"`
-	Diagnosis   string          `json:"diagnosis,omitempty"    dynamodbav:"diagnosis,omitempty"`
-	CreatedAt   string          `json:"created_at"             dynamodbav:"created_at"`
-	DiagnosedAt string          `json:"diagnosed_at,omitempty" dynamodbav:"diagnosed_at,omitempty"`
-	QueuedAt    string          `json:"queued_at,omitempty"    dynamodbav:"queued_at,omitempty"`
-	StartedAt   string          `json:"started_at,omitempty"   dynamodbav:"started_at,omitempty"`
-	FinishedAt  string          `json:"finished_at,omitempty"  dynamodbav:"finished_at,omitempty"`
-	UpdatedAt   string          `json:"updated_at"             dynamodbav:"updated_at"`
+	OrderID string `json:"order_id"               dynamodbav:"order_id"`
+	SagaID  string `json:"saga_id,omitempty"      dynamodbav:"saga_id,omitempty"`
+	// CorrelationID liga os eventos desta OS ao mesmo rastro no New Relic.
+	CorrelationID string          `json:"correlation_id,omitempty" dynamodbav:"correlation_id,omitempty"`
+	Status        ExecutionStatus `json:"status"                 dynamodbav:"status"`
+	Diagnosis     string          `json:"diagnosis,omitempty"    dynamodbav:"diagnosis,omitempty"`
+	CreatedAt     string          `json:"created_at"             dynamodbav:"created_at"`
+	DiagnosedAt   string          `json:"diagnosed_at,omitempty" dynamodbav:"diagnosed_at,omitempty"`
+	QueuedAt      string          `json:"queued_at,omitempty"    dynamodbav:"queued_at,omitempty"`
+	StartedAt     string          `json:"started_at,omitempty"   dynamodbav:"started_at,omitempty"`
+	FinishedAt    string          `json:"finished_at,omitempty"  dynamodbav:"finished_at,omitempty"`
+	UpdatedAt     string          `json:"updated_at"             dynamodbav:"updated_at"`
 }
 
 var executionTransitions = map[ExecutionStatus]ExecutionStatus{

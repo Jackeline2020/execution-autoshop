@@ -22,7 +22,9 @@ func setupExecutionRouter() (*gin.Engine, *mocks.ExecutionRepositoryMock, *mocks
 	gin.SetMode(gin.TestMode)
 	repo := new(mocks.ExecutionRepositoryMock)
 	res := new(mocks.ReservationRepositoryMock)
-	h := handler.NewExecutionHandler(usecase.NewExecutionUseCase(repo, res))
+	pub := new(mocks.PublisherMock)
+	pub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	h := handler.NewExecutionHandler(usecase.NewExecutionUseCase(repo, res, pub))
 
 	r := gin.New()
 	r.GET("/executions/queue", h.Queue)

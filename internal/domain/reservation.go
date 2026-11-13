@@ -17,6 +17,7 @@ const (
 var (
 	ErrReservationNotFound = errors.New("reserva não encontrada")
 	ErrReservationExists   = errors.New("já existe reserva para esta OS")
+	ErrInvalidReservation  = errors.New("reserva inválida")
 )
 
 // InsufficientStockError indica que uma peça não existe ou não tem estoque
@@ -48,20 +49,20 @@ type Reservation struct {
 // uma transação do DynamoDB não pode alterar o mesmo item duas vezes.
 func NewReservation(orderID string, items []ReservationItem) (Reservation, error) {
 	if orderID == "" {
-		return Reservation{}, errors.New("OS é obrigatória")
+		return Reservation{}, fmt.Errorf("%w: OS é obrigatória", ErrInvalidReservation)
 	}
 	if len(items) == 0 {
-		return Reservation{}, errors.New("a reserva precisa de pelo menos uma peça")
+		return Reservation{}, fmt.Errorf("%w: a reserva precisa de pelo menos uma peça", ErrInvalidReservation)
 	}
 
 	totals := make(map[string]int)
 	order := make([]string, 0, len(items))
 	for _, it := range items {
 		if it.PartID == "" {
-			return Reservation{}, errors.New("peça é obrigatória")
+			return Reservation{}, fmt.Errorf("%w: peça é obrigatória", ErrInvalidReservation)
 		}
 		if it.Quantity <= 0 {
-			return Reservation{}, errors.New("quantidade da peça deve ser maior que zero")
+			return Reservation{}, fmt.Errorf("%w: quantidade da peça deve ser maior que zero", ErrInvalidReservation)
 		}
 		if _, seen := totals[it.PartID]; !seen {
 			order = append(order, it.PartID)
