@@ -38,6 +38,11 @@ func main() {
 	partUC := usecase.NewPartUseCase(partRepo)
 	partHandler := handler.NewPartHandler(partUC)
 
+	reservationRepo := repository.NewReservationDynamoRepository(dynamo)
+	executionRepo := repository.NewExecutionDynamoRepository(dynamo)
+	executionUC := usecase.NewExecutionUseCase(executionRepo, reservationRepo)
+	executionHandler := handler.NewExecutionHandler(executionUC)
+
 	r := gin.New()
 	r.Use(gin.Recovery())
 	if nrApp != nil {
@@ -60,6 +65,15 @@ func main() {
 			parts.PUT("/:id", partHandler.Update)
 			parts.PATCH("/:id/stock", partHandler.AdjustStock)
 			parts.DELETE("/:id", partHandler.Delete)
+		}
+
+		executions := staff.Group("/executions")
+		{
+			executions.GET("/queue", executionHandler.Queue)
+			executions.GET("/:order_id", executionHandler.GetByOrderID)
+			executions.POST("/:order_id/diagnosis", executionHandler.RegisterDiagnosis)
+			executions.POST("/:order_id/start", executionHandler.Start)
+			executions.POST("/:order_id/finish", executionHandler.Finish)
 		}
 	}
 
