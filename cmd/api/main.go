@@ -12,6 +12,8 @@ import (
 
 	"execution-autoshop/internal/handler"
 	"execution-autoshop/internal/middleware"
+	"execution-autoshop/internal/repository"
+	"execution-autoshop/internal/usecase"
 	"execution-autoshop/pkg/config"
 	"execution-autoshop/pkg/observability"
 
@@ -25,12 +27,16 @@ func main() {
 
 	nrApp := observability.NewRelicApp()
 
-	// Valida a configuração da AWS na subida (DynamoDB e SQS são usados a
-	// partir das próximas partes). Em ambiente local, AWS_ENDPOINT_URL
-	// aponta para o LocalStack.
-	if _, err := config.LoadAWSConfig(ctx); err != nil {
+	// Em ambiente local, AWS_ENDPOINT_URL aponta para o LocalStack.
+	awsCfg, err := config.LoadAWSConfig(ctx)
+	if err != nil {
 		log.Fatalf("erro ao carregar configuração da AWS: %v", err)
 	}
+	dynamo := repository.NewDynamoClient(awsCfg)
+
+	partRepo := repository.NewPartDynamoRepository(dynamo)
+	partUC := usecase.NewPartUseCase(partRepo)
+	partHandler := handler.NewPartHandler(partUC)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -40,6 +46,22 @@ func main() {
 	r.Use(middleware.Logger())
 
 	r.GET("/health", handler.HealthCheck)
+
+	// Rotas da oficina (funcionário / mecânico): exigem JWT
+	staff := r.Group("/")
+	staff.Use(middleware.AuthMiddleware())
+	{
+		parts := staff.Group("/parts")
+		{
+			parts.POST("", partHandler.Create)
+			parts.GET("", partHandler.GetAll)
+			parts.GET("/low-stock", partHandler.GetLowStock)
+			parts.GET("/:id", partHandler.GetByID)
+			parts.PUT("/:id", partHandler.Update)
+			parts.PATCH("/:id/stock", partHandler.AdjustStock)
+			parts.DELETE("/:id", partHandler.Delete)
+		}
+	}
 
 	srv := &http.Server{
 		Addr:              ":" + config.Port(),
