@@ -92,7 +92,7 @@ func (h *CommandHandler) reply(ctx context.Context, cmd messaging.Envelope, even
 	return h.publisher.Publish(ctx, evt)
 }
 
-func permanentIf(err error, permanent error) error {
+func permanentIf(err, permanent error) error {
 	if errors.Is(err, permanent) {
 		return fmt.Errorf("%w: %v", ErrPermanent, err)
 	}

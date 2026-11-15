@@ -112,7 +112,11 @@ AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_
 O pipeline exige **cobertura mínima de 80%** (`scripts/coverage.sh`) e
 envia a análise para o SonarCloud.
 
-<!-- Evidências: adicionar print do SonarCloud e link do projeto -->
+Resultado no SonarCloud (branch `main`): **92% de cobertura**, nota A em
+segurança, confiabilidade e manutenibilidade, e 0% de duplicação.
+Projeto: [Jackeline2020_execution-autoshop](https://sonarcloud.io/project/overview?id=Jackeline2020_execution-autoshop).
+
+![Análise do SonarCloud](assets/sonar-cobertura.png)
 
 ## CI/CD
 
