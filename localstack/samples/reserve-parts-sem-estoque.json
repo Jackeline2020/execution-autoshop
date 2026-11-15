@@ -1,0 +1,1 @@
+{"message_id":"teste-003","type":"ReserveParts","saga_id":"saga-teste-2","order_id":"os-teste-2","correlation_id":"corr-teste-2","occurred_at":"2026-11-12T00:00:00Z","payload":{"items":[{"part_id":"peca-teste","quantity":50}]}}

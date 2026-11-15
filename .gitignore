@@ -1,0 +1,9 @@
+.env
+coverage.out
+coverage.html
+*.exe
+main
+/bin/
+.idea/
+.vscode/
+coverage.filtered.out

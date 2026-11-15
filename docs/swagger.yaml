@@ -1,0 +1,531 @@
+basePath: /
+definitions:
+  domain.Execution:
+    properties:
+      correlation_id:
+        description: CorrelationID liga os eventos desta OS ao mesmo rastro no New
+          Relic.
+        type: string
+      created_at:
+        type: string
+      diagnosed_at:
+        type: string
+      diagnosis:
+        type: string
+      finished_at:
+        type: string
+      order_id:
+        type: string
+      queued_at:
+        type: string
+      saga_id:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/domain.ExecutionStatus'
+      updated_at:
+        type: string
+    type: object
+  domain.ExecutionStatus:
+    enum:
+    - aguardando_diagnostico
+    - diagnosticada
+    - na_fila
+    - em_reparo
+    - finalizada
+    type: string
+    x-enum-varnames:
+    - ExecutionAwaitingDiagnosis
+    - ExecutionDiagnosed
+    - ExecutionQueued
+    - ExecutionInRepair
+    - ExecutionFinished
+  domain.Part:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      min_stock:
+        type: integer
+      name:
+        description: oleo, filtro oleo, pastiha freio, parafuso, correia dentada
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+      unit:
+        description: unidade, litro, metro, par
+        type: string
+    type: object
+  dto.AdjustStockRequest:
+    properties:
+      quantity:
+        type: integer
+      reason:
+        description: entrada, saída, ajuste
+        type: string
+    required:
+    - quantity
+    - reason
+    type: object
+  dto.CreatePartRequest:
+    properties:
+      description:
+        type: string
+      min_stock:
+        type: integer
+      name:
+        type: string
+      price:
+        type: number
+      stock:
+        type: integer
+      unit:
+        type: string
+    required:
+    - name
+    - price
+    - unit
+    type: object
+  dto.DiagnosisRequest:
+    properties:
+      diagnosis:
+        type: string
+    required:
+    - diagnosis
+    type: object
+  dto.ErrorResponse:
+    properties:
+      errors:
+        items:
+          $ref: '#/definitions/errors.ValidationError'
+        type: array
+    type: object
+  dto.UpdatePartRequest:
+    properties:
+      description:
+        type: string
+      min_stock:
+        type: integer
+      name:
+        type: string
+      price:
+        type: number
+      unit:
+        type: string
+    required:
+    - name
+    - price
+    - unit
+    type: object
+  errors.ValidationError:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Diagnóstico, peças e estoque, reserva de peças e fila de execução dos
+    reparos.
+  title: AutoShop — Execution Service
+  version: "1.0"
+paths:
+  /executions/{order_id}:
+    get:
+      description: Mostra o andamento do diagnóstico e do reparo de uma OS
+      parameters:
+      - description: ID da OS
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Execution'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Consultar execução
+      tags:
+      - executions
+  /executions/{order_id}/diagnosis:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: ID da OS
+        in: path
+        name: order_id
+        required: true
+        type: string
+      - description: Diagnóstico
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DiagnosisRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Execution'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Registrar diagnóstico
+      tags:
+      - executions
+  /executions/{order_id}/finish:
+    post:
+      parameters:
+      - description: ID da OS
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Execution'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Finalizar reparo
+      tags:
+      - executions
+  /executions/{order_id}/start:
+    post:
+      parameters:
+      - description: ID da OS
+        in: path
+        name: order_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Execution'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Iniciar reparo
+      tags:
+      - executions
+  /executions/queue:
+    get:
+      description: Lista as OS que aguardam diagnóstico ou reparo, das mais antigas
+        para as mais recentes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Execution'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Fila da oficina
+      tags:
+      - executions
+  /health:
+    get:
+      description: Indica se o processo da API está de pé
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /parts:
+    get:
+      description: Retorna todas as peças e insumos cadastrados
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Part'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Listar peças
+      tags:
+      - parts
+    post:
+      consumes:
+      - application/json
+      description: Cadastra uma nova peça ou insumo com estoque inicial
+      parameters:
+      - description: Dados da peça
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreatePartRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Part'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Criar peça
+      tags:
+      - parts
+  /parts/{id}:
+    delete:
+      description: Remove uma peça do sistema
+      parameters:
+      - description: ID da peça
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Deletar peça
+      tags:
+      - parts
+    get:
+      description: Retorna uma peça pelo ID
+      parameters:
+      - description: ID da peça
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Part'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Buscar peça
+      tags:
+      - parts
+    put:
+      consumes:
+      - application/json
+      description: Atualiza os dados de uma peça existente (sem alterar estoque)
+      parameters:
+      - description: ID da peça
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Dados atualizados
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePartRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Part'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Atualizar peça
+      tags:
+      - parts
+  /parts/{id}/stock:
+    patch:
+      consumes:
+      - application/json
+      description: Adiciona ou remove quantidade do estoque (use negativo para saída)
+      parameters:
+      - description: ID da peça
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Ajuste de estoque
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdjustStockRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Part'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+        "422":
+          description: Unprocessable Entity
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Ajustar estoque
+      tags:
+      - parts
+  /parts/low-stock:
+    get:
+      description: Retorna peças com estoque abaixo ou igual ao mínimo
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/domain.Part'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Peças com estoque baixo
+      tags:
+      - parts
+securityDefinitions:
+  BearerAuth:
+    description: 'Digite: Bearer {seu_token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

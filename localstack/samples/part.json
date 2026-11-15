@@ -1,0 +1,10 @@
+{
+  "part_id": {"S": "peca-teste"},
+  "name": {"S": "Pastilha de freio"},
+  "description": {"S": "Peça usada nos testes manuais"},
+  "price": {"N": "120"},
+  "stock": {"N": "5"},
+  "min_stock": {"N": "1"},
+  "unit": {"S": "par"},
+  "created_at": {"S": "2026-11-12T00:00:00Z"}
+}
