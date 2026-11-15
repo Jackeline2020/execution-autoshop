@@ -44,7 +44,7 @@ func (h *ExecutionHandler) Queue(c *gin.Context) {
 // @Security    BearerAuth
 // @Param       order_id path string true "ID da OS"
 // @Success     200 {object} domain.Execution
-// @Failure     404 {object} map[string][]pkgerrors.ValidationError
+// @Failure     404 {object} dto.ErrorResponse
 // @Router      /executions/{order_id} [get]
 func (h *ExecutionHandler) GetByOrderID(c *gin.Context) {
 	e, err := h.usecase.GetByOrderID(c.Param("order_id"))
@@ -63,9 +63,9 @@ func (h *ExecutionHandler) GetByOrderID(c *gin.Context) {
 // @Param       order_id path string true "ID da OS"
 // @Param       request body dto.DiagnosisRequest true "Diagnóstico"
 // @Success     200 {object} domain.Execution
-// @Failure     400 {object} map[string][]pkgerrors.ValidationError
-// @Failure     404 {object} map[string][]pkgerrors.ValidationError
-// @Failure     409 {object} map[string][]pkgerrors.ValidationError
+// @Failure     400 {object} dto.ErrorResponse
+// @Failure     404 {object} dto.ErrorResponse
+// @Failure     409 {object} dto.ErrorResponse
 // @Router      /executions/{order_id}/diagnosis [post]
 func (h *ExecutionHandler) RegisterDiagnosis(c *gin.Context) {
 	var req dto.DiagnosisRequest
@@ -87,8 +87,8 @@ func (h *ExecutionHandler) RegisterDiagnosis(c *gin.Context) {
 // @Security    BearerAuth
 // @Param       order_id path string true "ID da OS"
 // @Success     200 {object} domain.Execution
-// @Failure     404 {object} map[string][]pkgerrors.ValidationError
-// @Failure     409 {object} map[string][]pkgerrors.ValidationError
+// @Failure     404 {object} dto.ErrorResponse
+// @Failure     409 {object} dto.ErrorResponse
 // @Router      /executions/{order_id}/start [post]
 func (h *ExecutionHandler) Start(c *gin.Context) {
 	e, err := h.usecase.Start(c.Param("order_id"))
@@ -105,8 +105,8 @@ func (h *ExecutionHandler) Start(c *gin.Context) {
 // @Security    BearerAuth
 // @Param       order_id path string true "ID da OS"
 // @Success     200 {object} domain.Execution
-// @Failure     404 {object} map[string][]pkgerrors.ValidationError
-// @Failure     409 {object} map[string][]pkgerrors.ValidationError
+// @Failure     404 {object} dto.ErrorResponse
+// @Failure     409 {object} dto.ErrorResponse
 // @Router      /executions/{order_id}/finish [post]
 func (h *ExecutionHandler) Finish(c *gin.Context) {
 	e, err := h.usecase.Finish(c.Param("order_id"))
