@@ -1,3 +1,13 @@
+// @title           AutoShop — Execution Service
+// @version         1.0
+// @description     Diagnóstico, peças e estoque, reserva de peças e fila de execução dos reparos.
+// @BasePath        /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Digite: Bearer {seu_token}
+
 package main
 
 import (
@@ -19,9 +29,13 @@ import (
 	"execution-autoshop/pkg/config"
 	"execution-autoshop/pkg/observability"
 
+	_ "execution-autoshop/docs" // documentação Swagger gerada pelo swag
+
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/gin-gonic/gin"
 	"github.com/newrelic/go-agent/v3/integrations/nrgin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -77,6 +91,7 @@ func main() {
 	r.Use(middleware.Logger())
 
 	r.GET("/health", handler.HealthCheck)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Rotas da oficina (funcionário / mecânico): exigem JWT
 	staff := r.Group("/")
