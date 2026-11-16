@@ -98,3 +98,36 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.image.outputs.full }}
+
+  # Deploy no cluster EKS, só na main e com a variável AWS_DEPLOY_ENABLED
+  # ligada (fica desligada enquanto a infraestrutura não existe). Autentica
+  # na AWS por OIDC, sem chave fixa, e aplica os manifestos de k8s/.
+  deploy-aws:
+    name: Deploy Produção (EKS)
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Credenciais AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Apontar o kubectl para o cluster EKS
+        run: aws eks update-kubeconfig --region us-east-1 --name autoshop-eks
+
+      - name: Aplicar manifestos e aguardar o rollout
+        env:
+          SERVICE: autoshop-execution
+          IMAGE: ${{ needs.build-and-push.outputs.image }}
+          RUN_MIGRATIONS: "false"
+          IRSA_ROLE_ARN: ${{ secrets.IRSA_ROLE_ARN }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+        run: sh ./scripts/deploy-aws.sh

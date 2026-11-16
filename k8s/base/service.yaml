@@ -1,0 +1,13 @@
+# Usado pelo OS Service (catálogo de peças) e, na AWS, exposto para o mecânico
+apiVersion: v1
+kind: Service
+metadata:
+  name: autoshop-execution
+  namespace: autoshop
+spec:
+  type: ClusterIP
+  selector:
+    app: autoshop-execution
+  ports:
+    - port: 8080
+      targetPort: 8080
