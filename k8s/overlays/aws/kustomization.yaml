@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - configmap.yaml
+  - secret.yaml
+  - serviceaccount.yaml
+
+# Exposto por um Load Balancer da AWS para as chamadas externas
+patches:
+  - target:
+      kind: Service
+      name: autoshop-execution
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: LoadBalancer

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: autoshop-execution-config
+  namespace: autoshop
+data:
+  PORT: "8080"
+  AWS_REGION: "us-east-1"
+  # Tabelas criadas pela stack execution/ do infra-db-autoshop
+  PARTS_TABLE: "autoshop-parts"
+  RESERVATIONS_TABLE: "autoshop-reservations"
+  EXECUTIONS_TABLE: "autoshop-executions"
+  PROCESSED_MESSAGES_TABLE: "autoshop-processed_messages"
+  EXECUTION_COMMANDS_QUEUE: "execution-commands"
+  OS_EVENTS_QUEUE: "os-events"
+  NEW_RELIC_APP_NAME: "autoshop-execution"
