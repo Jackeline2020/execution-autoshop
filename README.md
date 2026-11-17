@@ -127,7 +127,12 @@ e em push para `develop` e `main`:
 2. Testes unitários e de integração (LocalStack no próprio pipeline)
 3. Verificação de cobertura mínima
 4. SonarCloud
-5. Build e publicação da imagem Docker no GitHub Container Registry
+5. Build e publicação da imagem Docker no GitHub Container Registry (push)
+6. Produção (`main`): deploy no EKS (`scripts/deploy-aws.sh`), habilitado
+   pela variável `AWS_DEPLOY_ENABLED`
 
 As branches `main` e `develop` são protegidas: alterações só entram por
 pull request, com as checagens acima aprovadas.
+
+Secrets usados: `AWS_ROLE_ARN`, `IRSA_ROLE_ARN`, `JWT_SECRET`,
+`NEW_RELIC_LICENSE_KEY`, `SONAR_TOKEN`.
